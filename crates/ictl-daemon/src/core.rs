@@ -1220,8 +1220,15 @@ impl Daemon {
             Request::Tap { x, y, count } => self.tap(g, x, y, count, view).await,
             Request::TapSequence { points } => self.tap_sequence(g, &points).await,
             Request::TapElement { text, index, max_age_ms, scroll } => {
-                self.tap_element(g, &text, index, Duration::from_millis(max_age_ms), scroll).await.map(|(t, missed)| {
+                let scrolled = scroll.is_some();
+                let r = self.tap_element(g, &text, index, Duration::from_millis(max_age_ms), scroll).await;
+                r.map(|(t, missed)| {
                     outcome.tapped_nothing = missed;
+                    // nothing was tapped (and nothing scrolled): there is no "before the action" to compare the screen
+                    // with, or the next settle would say the tap may not have taken effect
+                    if missed && !scrolled {
+                        g.dev.before_action = None;
+                    }
                     t
                 })
             }
